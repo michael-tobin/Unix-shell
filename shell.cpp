@@ -1,10 +1,8 @@
 #include "shell.h"
-//#include <stdio.h>
 #include <unistd.h>
 #include <csignal>
-//#include <stdlib.h>
-//#include <sys/wait.h>
-//#include <sys/types.h>
+#include <cstdlib>
+#include <sys/wait.h>
 #include <iostream>
 using namespace std;
 
@@ -31,7 +29,16 @@ void shell::list_commands()
 {
     cout << "====================================================\n"
     << "Some usable commands include:\n"
-    << "";
+    << "ls      Lists files in current directory\n"
+    << "cd      Move back one directory\n"
+    << "mkdir   Make a directory\n"
+    << "rmdir   Remove direcory\n"
+    << "rm      Remove file\n"
+    << "mv      Move or rename files\n"
+    << "history View the past 10 commands\n"
+    << "!!      Run the last command again\n"
+    << "!n      Run the nth command again\n"
+    << "====================================================\n";
 }
 
 
@@ -106,8 +113,14 @@ void shell::display_history()
 // PARAMETER: None
 void shell::run_last_history()
 {
-    cout << history.back() << endl;
-    parse_command(history.back());
+    if (history.empty())
+        cout << "Command not found!" << endl;
+
+    else
+    {
+        cout << history.back() << endl;
+        parse_command(history.back());
+    }
 }
 
 
@@ -123,25 +136,25 @@ void shell::run_nth_history(int n)
 // PURPOSE: To view the user's input, check for any specific commands like !!, !#, exit, history, and if any
 // other regular command then execute the command.
 // PARAMETER: string input
-void shell::parse_command(string cmd_input
-)
+void shell::parse_command(string cmd_input)
 {
+    string key("&"); //To use for the rfind function next line.
+    size_t found = cmd_input.rfind(key);//Starts from the rear of the string and
+
     // check for case where empty line is entered as a command
     if (cmd_input == " " || cmd_input.empty())
     {
         cout << "Command not found!" << endl;
         return;
     }
+
     // add commands to history
-    if (cmd_input.at(0) != '!')
+    else if (cmd_input.at(0) != '!')
     {
         add_to_history(cmd_input); // add the command to history only if it is not a !# command
     }
-    string key("&"); //To use for the rfind function next line.
-    size_t found = cmd_input.rfind(key);//Starts from the rear of the string and
-    //finds if there is an '&'
-    // check if & is at end of command
-    if (found!=std::string::npos) // check if parent should not wait
+
+    else if (found!=std::string::npos) // check if parent should not wait
     {
         cmd_input.replace(found,key.length(),"");
         cout << cmd_input << endl;
@@ -149,30 +162,26 @@ void shell::parse_command(string cmd_input
     }
 
     // Parse out different types of commands
-    if (cmd_input == "exit") // if user enters exit command
+    else if (cmd_input == "exit") // if user enters exit command
     {
         kill_all_proc(-1);
     }
+
     else if (cmd_input == "history") //If the user entered the command "history"
     {
         display_history();
     }
+
     else if (cmd_input == "!") // except in case for when just ! entered
     {
         cout << "Command not found!" << endl;
-        return;
     }
+
     else if (cmd_input == "!!") // if the user enters "!!"
     {
-        if (hist_num <= 0) // exception case for no commands in history
-        {
-            cout << "No commands in history." << endl;
-        }
-        else //otherwise run this function.
-        {
-            run_last_history();
-        }
+        run_last_history();
     }
+
     else if (cmd_input.at(0) == '!' && isdigit(cmd_input.at(1))) // if user enters "!#"
     {
         cmd_input.erase(cmd_input.begin()); // remove the ! from the command
@@ -243,7 +252,7 @@ void shell::execute_command(char *cmd_array[])
         else
         {
             run_in_background = false;
-            cout << endl << endl;
+            cout << "\n\n";
         }
     }
 }

@@ -13,6 +13,7 @@ int main()
          << "====================================================" << endl;
 
     shell shell; // Create a new shell program
+    shell.list_commands();
     shell.listen(); // Start listening for inputs
     return 0;
 }
