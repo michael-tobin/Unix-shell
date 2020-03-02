@@ -112,7 +112,7 @@ void shell::display_history()
 
 // PURPOSE: Runs the most recent command again
 // PARAMETER: None
-void shell::run_last_history()
+void shell::run_last_command()
 {
     if (history.empty())
         cout << "Command not found!" << endl;
@@ -127,7 +127,7 @@ void shell::run_last_history()
 
 // PURPOSE: Allows the user to choose a command to run again
 // PARAMETER: n
-void shell::run_nth_history(int n)
+void shell::run_nth_command(int n)
 {
     cout << history[n - 1] << endl;
     parse_command(history[n - 1]);
@@ -181,7 +181,7 @@ void shell::parse_command(string cmd_input)
 
     else if (cmd_input == "!!") // if the user enters "!!"
     {
-        run_last_history();
+        run_last_command();
     }
 
     else if (cmd_input.at(0) == '!' && isdigit(cmd_input.at(1))) // if user enters "!#"
@@ -194,7 +194,7 @@ void shell::parse_command(string cmd_input)
         }
         else //run the command that the user wants to run again.
         {
-            run_nth_history(nthCmd);
+            run_nth_command(nthCmd);
         }
     }
     else // for all other commands, execute with unix shell commands
