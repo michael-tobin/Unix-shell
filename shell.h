@@ -16,6 +16,7 @@ private:
 public:
     shell(); // Default constructor
     ~shell(); // Default destructor
+    void list_commands();
     void listen(); // Wait for user input
     void kill_all_proc(int sig);
     void add_to_history(string newCmd);
