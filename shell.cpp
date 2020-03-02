@@ -1,4 +1,5 @@
 #include "shell.h"
+#include <cstdio>
 #include <unistd.h>
 #include <csignal>
 #include <cstdlib>
@@ -138,8 +139,7 @@ void shell::run_nth_history(int n)
 // PARAMETER: string input
 void shell::parse_command(string cmd_input)
 {
-    string key("&"); //To use for the rfind function next line.
-    size_t found = cmd_input.rfind(key);//Starts from the rear of the string and
+
 
     // check for case where empty line is entered as a command
     if (cmd_input == " " || cmd_input.empty())
@@ -154,7 +154,9 @@ void shell::parse_command(string cmd_input)
         add_to_history(cmd_input); // add the command to history only if it is not a !# command
     }
 
-    else if (found!=std::string::npos) // check if parent should not wait
+    string key("&"); //To use for the rfind function next line.
+    size_t found = cmd_input.rfind(key);//Starts from the rear of the string and
+    if (found!=std::string::npos) // check if parent should not wait
     {
         cmd_input.replace(found,key.length(),"");
         cout << cmd_input << endl;
