@@ -24,7 +24,7 @@ shell::~shell()
     kill_all_proc(0);
 }
 
-// PURPOSE: Display usable commands to the user
+// PURPOSE: Display some usable command suggestions to the user
 // PARAMETER: None
 void shell::list_commands()
 {
@@ -47,32 +47,184 @@ void shell::list_commands()
 // PARAMETER: none
 void shell::listen()
 {
-    string input; //used to take the user's input
-    while(input!="exit")//While the user didn't enter exit.
+    string input;
+    while(input!="exit") // As long as the user hasn't chosen to exit.
     {
         cout << "User >> "; // Prompt for the user to enter a command
         getline(cin,input); // Wait for input
-        parse_command(input); // Send the input to be parsed
+        parse_command(input); // Send the input to the parser
     }
 };
 
 
-// PURPOSE: Kills all current processes
-// PARAMETER: int sig
-void shell::kill_all_proc(int sig)
+// PURPOSE: To view the user's input, check for any specific commands like !!, !#, exit, history, and if any
+// other regular command then execute the command.
+// PARAMETER: string input
+void shell::parse_command(string cmd_input)
 {
-    if(!PIDList.empty())//If any processes are in the vector list of PIDs than kill.
+    // Case where user did not type a command, and pressed enter
+   if (cmd_input.empty())
     {
-        cout << "Ending... Killing all Processes from this session" << endl;
-        for(int i : PIDList) // Kill all processes that are left running then
-            // kill the program.
+        return;
+    }
+
+    // Case where the user entered only spaces as a command
+    for (char i : cmd_input)
+    {
+        if (!isspace(i))
         {
-            kill(i, SIGKILL);
+            break;
         }
     }
-    exit(sig); // Kill the program
+
+    // **********************************************************************
+    // Any command that has made it this far has at least SOMETHING typed in
+    // **********************************************************************
+
+    // Case where command is NOT preceded with !, used to indicate previous commands
+    if (cmd_input.at(0) != '!')
+    {
+        add_to_history(cmd_input); // Add the command to history only if it is a new command
+    }
+
+    string key("&"); // Key for rfind
+    size_t found = cmd_input.rfind(key); // Starts from the rear of the string and checks for the key
+    if (found!=string::npos)
+    {
+        cmd_input.replace(found,key.length(),""); // remove the '&' from the end
+        cout << cmd_input << endl;
+        run_in_background = true; // Allows the process to run and the user to input more commands
+    }
+
+    // **********************************************************************
+    // Any command that has made it this far is not empty, has been checked for
+    // whether it should be run in the background, and (if not a repeat command
+    // !! or !n) has been added to the history.
+    // **********************************************************************
+
+    // **********************************************************************
+    // The next section checks for a few reserved special commands.
+    // **********************************************************************
+    // Case where the command is 'exit', kill all active processes and exit
+    else if (cmd_input == "exit")
+    {
+        kill_all_proc(-1);
+    }
+
+    // Case where the command is 'history', display the last 10 commands
+    else if (cmd_input == "history")
+    {
+        display_history();
+    }
+
+    // Case where the command is a single '!'; this saves the shell from an error
+    else if (cmd_input == "!")
+    {
+        cout << "Command not found, enter a new command.\n";
+    }
+
+    // Case where the command is '!!', rerun the most recent command
+    else if (cmd_input == "!!") // if the user enters "!!"
+    {
+        run_last_command();
+    }
+
+    // Case where user enters '!n", rerun the nth command
+    else if (cmd_input.at(0) == '!' && isdigit(cmd_input.at(1)))
+    {
+        // Strip out the '!' and convert n to an int
+        cmd_input.erase(cmd_input.begin());
+        int n = atoi(cmd_input.c_str());
+
+        // Case where the user has chosen an n value that is out of scope
+        if (n < 1 || n > (int)(history.size()))
+        {
+            cout << "No results, try another command.\n";
+        }
+
+        // Case where n is valid, rerun the nth command
+        else
+        {
+            run_nth_command(n);
+        }
+    }
+
+    // **********************************************************************
+    // Any other commands run through this function. The function takes the
+    // command string and splits it into individual tokenized words, then
+    // fills an array with pointers to these tokens. That array is then sent
+    // to the execute command.
+    // **********************************************************************
+
+    else
+    {
+
+        // Create an array of character pointers and make them all point to null.
+        char* cmd_array[30];
+        for(auto & i : cmd_array)
+        {
+            i = nullptr;
+        }
+
+        // Copy the users input to an array of chars, this allows it to be tokenized
+        char command [50]; // Create a blank array of chars
+        strcpy(command, cmd_input.c_str()); // Copy the command string to the array.
+        char* command_first_word = strtok(command, " "); // Tokenize it
+
+        int x = 0; // Counter for position in the array
+        while(command_first_word != nullptr)
+            {
+            cmd_array[x] = command_first_word; // insert the word into the command array.
+            x++; // Move to the next position in the array.
+            command_first_word = strtok(nullptr, " "); // Check the next section if it is NULL.
+        }
+
+        execute_command(cmd_array);
+    }
 }
 
+
+// PURPOSE: Read the command, make a fork() system call, print the command, then
+//          execute it.
+// PARAMETER: The array of pointers to the command words
+void shell::execute_command(char *cmd_array[])
+{
+    pid_t pid = fork(); // Fork the parent process
+    PIDList.push_back(getpid()); // Store the PID into the vector of Process ID's
+
+    // Case where the pid < zero, report a failure and kill all processes
+    if(pid < 0)
+    {
+        cout << "Fork Failed, killing processes\n";
+        kill_all_proc(-1);
+    }
+
+    // Case where PID == 0, execute the command. If failure is returned, tell the user else, continue.
+    if(pid == 0)
+    {
+        if(execvp(cmd_array[0], cmd_array) == -1)
+        {
+            cout << "That is not a valid command.\n";
+            exit(0);
+        }
+    }
+
+    // Case where PID > 0, try to run the command in the background
+    if(pid > 0)//If the Process is the Parent than wait
+    {
+        if (!run_in_background)
+        {
+            if (wait(0) == -1)
+                perror("wait");
+        }
+
+        else
+        {
+            run_in_background = false;
+            cout << "\n\n";
+        }
+    }
+}
 
 // PURPOSE: Pushes command to the record of commands
 // PARAMETER: None
@@ -83,13 +235,37 @@ void shell::add_to_history(string newCmd)
 }
 
 
+// PURPOSE: Runs the most recent command again
+// PARAMETER: None
+void shell::run_last_command()
+{
+    if (history.empty())
+        cout << "Command not found.\n";
+
+    else
+    {
+        cout << history.back() << endl;
+        parse_command(history.back());
+    }
+}
+
+
+// PURPOSE: Allows the user to choose a command to run again
+// PARAMETER: n
+void shell::run_nth_command(int n)
+{
+    cout << history[n - 1] << endl;
+    parse_command(history[n - 1]);
+}
+
+
 // PURPOSE: Shoes the last 10 commands
 // PARAMETER: None
 void shell::display_history()
 {
     if (history.empty()) //If nothing in history than display error.
     {
-        cout << "Error, no commands in history."<< endl;
+        cout << "Error, no commands in history.\n";
     }
     else //otherwise display the last ten commands used
     {
@@ -110,153 +286,17 @@ void shell::display_history()
 }
 
 
-// PURPOSE: Runs the most recent command again
-// PARAMETER: None
-void shell::run_last_command()
+// PURPOSE: Kills all current processes
+// PARAMETER: int sig
+void shell::kill_all_proc(int sig)
 {
-    if (history.empty())
-        cout << "Command not found!" << endl;
-
-    else
+    if(!PIDList.empty())
     {
-        cout << history.back() << endl;
-        parse_command(history.back());
+        cout << "Ending... Killing all Processes from this session.\n";
+        for(int i : PIDList)
+        {
+            kill(i, SIGKILL);
+        }
     }
+    exit(sig); // Kill the program
 }
-
-
-// PURPOSE: Allows the user to choose a command to run again
-// PARAMETER: n
-void shell::run_nth_command(int n)
-{
-    cout << history[n - 1] << endl;
-    parse_command(history[n - 1]);
-}
-
-
-// PURPOSE: To view the user's input, check for any specific commands like !!, !#, exit, history, and if any
-// other regular command then execute the command.
-// PARAMETER: string input
-void shell::parse_command(string cmd_input)
-{
-
-
-    // check for case where empty line is entered as a command
-    if (cmd_input == " " || cmd_input.empty())
-    {
-        cout << "Command not found!" << endl;
-        return;
-    }
-
-    // add commands to history
-    else if (cmd_input.at(0) != '!')
-    {
-        add_to_history(cmd_input); // add the command to history only if it is not a !# command
-    }
-
-    string key("&"); //To use for the rfind function next line.
-    size_t found = cmd_input.rfind(key);//Starts from the rear of the string and
-    if (found!=std::string::npos) // check if parent should not wait
-    {
-        cmd_input.replace(found,key.length(),"");
-        cout << cmd_input << endl;
-        run_in_background = true;
-    }
-
-    // Parse out different types of commands
-    else if (cmd_input == "exit") // if user enters exit command
-    {
-        kill_all_proc(-1);
-    }
-
-    else if (cmd_input == "history") //If the user entered the command "history"
-    {
-        display_history();
-    }
-
-    else if (cmd_input == "!") // except in case for when just ! entered
-    {
-        cout << "Command not found!" << endl;
-    }
-
-    else if (cmd_input == "!!") // if the user enters "!!"
-    {
-        run_last_command();
-    }
-
-    else if (cmd_input.at(0) == '!' && isdigit(cmd_input.at(1))) // if user enters "!#"
-    {
-        cmd_input.erase(cmd_input.begin()); // remove the ! from the command
-        int nthCmd = atoi(cmd_input.c_str());// convert string to int for nth command
-        if (nthCmd < 1 || nthCmd > (int)(history.size()))
-        {
-            cout << "No such command in history." << endl;
-        }
-        else //run the command that the user wants to run again.
-        {
-            run_nth_command(nthCmd);
-        }
-    }
-    else // for all other commands, execute with unix shell commands
-    {
-        //Tokenize the user's command, view the command, parse the first part of it.
-        char command [50];
-        char* cmd_array[30];
-        for(auto & i : cmd_array)//Nullify the array
-        {
-            i = NULL;
-        }
-        strcpy(command, cmd_input.c_str());//copy the string into a char array.
-        char* p = strtok(command, " ");//tokenize the first word of the command line.
-        int x = 0;
-        while(p!= NULL) //while there is input til you hit NULL
-        {
-            cmd_array[x] = p;//insert the word into the command array.
-            x++;//On the the next word.
-            p = strtok(NULL, " ");//Check the next section if it is NULL. If it is exit while,
-            // if not then grab the next data and place it in the cmd_array.
-
-        }//After parsing then execute the command.
-        execute_command(cmd_array);
-    }
-}
-
-
-// PURPOSE: Read the command, make a fork() system call, and push the command onto the terminal screen and execute it.
-// PARAMETER: char* cmd[]
-void shell::execute_command(char *cmd_array[])
-{
-    pid_t pid = fork(); //fork the process
-    PIDList.push_back(getpid()); //grab the process id and place it in the vector.
-    //DEBUG cout << "After the fork command, pid is: " << pid << endl;
-    if(pid < 0)// If the pid is below zero then report a Fork Failed!
-    {
-        cout << "Fork Failed!" << endl;
-        kill_all_proc(-1);
-    }
-    if(pid == 0)
-    {
-        // DEBUG cout << "Child Pid: " << pid << endl;
-        if(execvp(cmd_array[0], cmd_array) == -1) //If the command doesn't exist then tell the user.
-        {
-            cout << "This command doesn't exists!" << endl;
-            exit(0);
-        }
-    }
-    if(pid > 0)//If the Process is the Parent than wait
-    {
-        if (!run_in_background)
-        {
-            if (wait(0) == -1)
-                perror("wait");
-            // DEBUG cout << "Parent ID: " << pid << endl;
-        }
-        else
-        {
-            run_in_background = false;
-            cout << "\n\n";
-        }
-    }
-}
-
-
