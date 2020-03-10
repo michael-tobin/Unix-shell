@@ -11,7 +11,7 @@ class shell
 private:
     bool run_in_background; // Whether or not the process can run in the background.
     int hist_num; // A counter of commands in history.
-    vector<int> PIDList; // Vector list of processes.
+    vector<int> PIDList; // Vector list of process IDs.
     vector<string> history; // Vector of commands entered.
 
 public:
